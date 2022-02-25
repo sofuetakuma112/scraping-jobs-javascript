@@ -37,27 +37,95 @@ await Promise.all([
   page.goto(startUrl),
   page.waitForNavigation({ waitUntil: ["load", "networkidle2"] }),
 ]);
-await sleep(500);
+// ページ下までスクロール
+await autoScroll(page);
+await sleep(1000);
 
 const extractInfoFromSinglePage = async (page) => {
+  // 詳細ページへのURL一覧を取得
   const detailAnchorElems = await page.$$("#main .project-title a");
   const detailUrls = await Promise.all(
     detailAnchorElems.map((detailPageElem) =>
       getHrefFromElemHandler(detailPageElem)
     )
   );
+  // 次ページのURLを取得
   const nextPageAnchorElem = await page.$(".next a");
   const nextPageUrl = await getHrefFromElemHandler(nextPageAnchorElem);
 
-  const subRecords = [];
+  // 案件一覧からSummaryデータを抽出
+  const articleElems = await page.$$("article.projects-index-single");
+  const jobSummaries = await Promise.all(
+    articleElems.map(async (elem, i) => {
+      // アイキャッチ画像URL
+      let eyecatchImgSrc = "";
+      try {
+        const imgElemHandler = await elem.$(".cover-image > img");
+        eyecatchImgSrc = await getSrcFromElemHandler(imgElemHandler);
+      } catch (error) {
+        eyecatchImgSrc = "";
+      }
 
+      // タグ
+      const tagElemHandlers = await elem.$$(".project-tag");
+      const tags = (
+        await Promise.all(
+          tagElemHandlers.map((elem) => getTextContentFromElemHandler(elem))
+        )
+      ).map((tag) => tag.trim());
+
+      // 案件名
+      const titleElemHandler = await elem.$(".project-title > a");
+      const title = (
+        await getTextContentFromElemHandler(titleElemHandler)
+      ).trim();
+
+      // 要約分
+      const summaryElemHandler = await elem.$(".project-excerpt");
+      const summary = (
+        await getTextContentFromElemHandler(summaryElemHandler)
+      ).trim();
+
+      // アイキャッチ画像URL
+      let companyThumbnailImgSrc = "";
+      try {
+        const imgElemHandler = await elem.$(".company-thumbnail > a > img");
+        companyThumbnailImgSrc = await getSrcFromElemHandler(imgElemHandler);
+      } catch (error) {
+        companyThumbnailImgSrc = "";
+      }
+
+      // 会社名
+      const companyNameElemHandler = await elem.$(".company-name > h3 > a");
+      const companyName = (
+        await getTextContentFromElemHandler(companyNameElemHandler)
+      ).trim();
+
+      return {
+        eyecatchImgSrc,
+        // jobTitle,
+        summary,
+        companyThumbnailImgSrc,
+        tags: tags.join(", "),
+        // companyName,
+        // detailUrl: detailUrls[i],
+      };
+    })
+  );
+
+  const jobDetails = [];
   for await (const detailUrl of detailUrls) {
     const detailPageInfo = await extractInfoFromDetailPage(detailUrl, page);
-    subRecords.push(detailPageInfo);
+    jobDetails.push(detailPageInfo);
     await sleep(1000);
   }
 
-  return [subRecords, nextPageUrl];
+  // SummaryとDetailの合成
+  const jobs = jobDetails.map((_, i) => ({
+    ...jobSummaries[i],
+    ...jobDetails[i],
+  }));
+  return [jobs, nextPageUrl];
 };
 
 // CSV設定
@@ -66,12 +134,20 @@ const csvWriter = createObjectCsvWriter({
   header: [
     { id: "title", title: "title" },
     { id: "company", title: "company" },
-    { id: "date", title: "date" },
+    { id: "establishmentDate", title: "establishmentDate" },
+    { id: "countOfMember", title: "countOfMember" },
+    { id: "location", title: "location" },
+    { id: "publishDate", title: "publishDate" },
+    { id: "view", title: "view" },
+    { id: "countOfEntry", title: "countOfEntry" },
     { id: "description", title: "description" },
+    { id: "summary", title: "summary" },
+    { id: "tags", title: "tags" },
     { id: "url", title: "url" },
+    { id: "eyecatchImgSrc", title: "eyecatchImgSrc" },
+    { id: "companyThumbnailImgSrc", title: "companyThumbnailImgSrc" },
   ],
 });
-let records = [];
 let pageNum = 1;
 while (true) {
   const notFoundElem = await page.$(".projects-not-found-wrapper");
@@ -81,15 +157,15 @@ while (true) {
   }
   console.log(`${pageNum}ページ`);
   const [subRecords, nextPageUrl] = await extractInfoFromSinglePage(page);
-  // 書き込み
-  // records = [...records, ...subRecords];
   await csvWriter.writeRecords(subRecords);
   if (nextPageUrl) {
     await Promise.all([
       page.goto(nextPageUrl),
       page.waitForNavigation({ waitUntil: ["load", "networkidle2"] }),
     ]);
-    await sleep(500);
+    // ページ下までスクロール
+    await autoScroll(page);
+    await sleep(1000);
     pageNum += 1;
   } else break;
 }

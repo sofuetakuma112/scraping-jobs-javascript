@@ -14,7 +14,9 @@ const assignDescription = (description) => (word) =>
 
 fs.createReadStream("./csv/wantedly.csv").pipe(
   csv.parse({ columns: true }, function (err, data) {
-    const andWords = ["React", "フロントエンド"];
+    // const andWords = ["React", "フロントエンド"];
+    // const orWords = ["リモート", "テレワーク", "在宅", "東京"];
+    const andWords = ["フロントエンド"];
     const orWords = ["リモート", "テレワーク", "在宅", "東京"];
     const filteredJobInfos = data.filter(
       ({ title, company, date, description, url }) => {
@@ -34,14 +36,6 @@ fs.createReadStream("./csv/wantedly.csv").pipe(
         jobs.set(company, [...companyJobList, jobInfo]);
       } else jobs.set(company, [jobInfo]);
     });
-    // const duplicateDeletion = _.uniqBy(filtered, "company");
-    // console.log(
-    //   duplicateDeletion.map(
-    //     ({ title, company, date, url }) =>
-    //       `(${date})[${company}]${title}: ${url}`
-    //   )
-    // );
-    // console.log(`hit: ${duplicateDeletion.length}`);
     const jobsSplitByCompany = [];
     for (let [key, companyJobs] of jobs.entries()) {
       jobsSplitByCompany.push(companyJobs);
@@ -54,5 +48,6 @@ fs.createReadStream("./csv/wantedly.csv").pipe(
         )
       ).map(companyJobs => companyJobs[0])
     );
+    console.log(jobsSplitByCompany.length)
   })
 );

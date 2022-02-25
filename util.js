@@ -37,8 +37,10 @@ export const sleep = (ms) => {
 
 export const range = (length) => Array.from({ length }, (v, i) => i);
 
-export const formatDate = (date) => {
-  const regex = /[0-9]{4}\/(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])/;
+export const formatDate = (
+  date,
+  regex = /[0-9]{4}\/(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])/
+) => {
   const found = date.match(regex);
   if (found) {
     return found[0];
@@ -59,33 +61,99 @@ export const extractInfoFromDetailPage = async (detailUrl, page) => {
     page.goto(urlNoQuery),
     page.waitForNavigation({ waitUntil: ["load", "networkidle2"] }),
   ]);
-  const titleSuggestions1 = await page.$(".project-title.new-style");
-  const titleSuggestions2 = await page.$(".project-title");
-  const title = titleSuggestions1 || titleSuggestions2;
+  const titleSuggestionsElem1 = await page.$(".project-title.new-style");
+  const titleSuggestionsElem2 = await page.$(".project-title");
+  const titleElem = titleSuggestionsElem1 || titleSuggestionsElem2;
 
-  const companySuggestions1 = await page.$(".new-style.company-link");
-  const companySuggestions2 = await page.$(".company-name");
-  const company = companySuggestions1 || companySuggestions2;
+  const companySuggestionsElem1 = await page.$(".new-style.company-link");
+  const companySuggestionsElem2 = await page.$(".company-name");
+  const companyElem = companySuggestionsElem1 || companySuggestionsElem2;
 
-  const date = await page.$(".header-tags-right .separated");
-  const description = await page.$(".js-descriptions ");
+  let establishmentDateElem;
+  try {
+    establishmentDateElem = await page.$(
+      ".company-icon.icon-flag ~ .company-description"
+    );
+  } catch {
+    establishmentDateElem = null;
+  }
 
-  const titleText = (await getTextContentFromElemHandler(title)).trim();
-  const companyText = (await getTextContentFromElemHandler(company)).trim();
-  const dateText = (await getTextContentFromElemHandler(date)).trim();
-  const formattedDate = formatDate(dateText);
-  const descriptionText = (
-    await getTextContentFromElemHandler(description)
+  let memberElem;
+  try {
+    memberElem = await page.$(
+      ".company-icon.icon-group ~ .company-description"
+    );
+  } catch {
+    memberElem = null;
+  }
+
+  let locationElem;
+  try {
+    locationElem = await page.$(
+      ".company-icon.wt-icon.wt-icon-location ~ .company-description"
+    );
+  } catch {
+    locationElem = null;
+  }
+
+  const separatedElems = await page.$$(".header-tags-right .separated");
+  const descriptionElem = await page.$(".js-descriptions ");
+
+  const entryElem = await page.$(".entry-info");
+
+  const title = (await getTextContentFromElemHandler(titleElem)).trim();
+  const company = (await getTextContentFromElemHandler(companyElem)).trim();
+
+  let establishmentDate;
+  if (establishmentDateElem) {
+    const establishmentDateText = (
+      await getTextContentFromElemHandler(establishmentDateElem)
+    ).trim();
+    establishmentDate = formatDate(
+      establishmentDateText,
+      /[0-9]{4}\/(0[1-9]|1[0-2])/
+    );
+  }
+
+  let countOfMember;
+  if (memberElem) {
+    const member = (await getTextContentFromElemHandler(memberElem)).trim();
+    countOfMember = member.slice(0, member.indexOf("人"));
+  }
+
+  let location;
+  if (locationElem) {
+    location = (await getTextContentFromElemHandler(locationElem)).trim();
+  }
+
+  const publishDateText = (await getTextContentFromElemHandler(separatedElems[0])).trim();
+  const publishDate = formatDate(publishDateText);
+
+  const viewText = (
+    await getTextContentFromElemHandler(separatedElems[1])
   ).trim();
-  const formattedDescText = formatText(descriptionText);
+  const view = viewText.slice(0, viewText.indexOf("views")).trim();
 
-  console.log(titleText);
+  const description = (
+    await getTextContentFromElemHandler(descriptionElem)
+  ).trim();
+  const formattedDesc = formatText(description);
+
+  const entry = (await getTextContentFromElemHandler(entryElem)).trim();
+  const countOfEntry = entry.slice(0, entry.indexOf("人"));
+
+  console.log(title);
 
   return {
-    title: titleText,
-    company: companyText,
-    date: formattedDate,
-    description: formattedDescText,
+    title,
+    company,
+    establishmentDate,
+    countOfMember,
+    location,
+    publishDate,
+    view,
+    countOfEntry,
+    description: formattedDesc,
     url: urlNoQuery,
   };
 };
