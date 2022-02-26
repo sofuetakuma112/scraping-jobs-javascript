@@ -25,8 +25,10 @@ const userAgent =
 page.setUserAgent(userAgent);
 
 const info = await extractInfoFromDetailPage(
-  "https://www.wantedly.com/projects/858553",
+  "https://www.wantedly.com/projects/190011",
   page
 );
 
 console.log(info);
+
+await browser.close();

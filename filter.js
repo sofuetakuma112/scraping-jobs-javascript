@@ -1,53 +1,105 @@
-import fs from "fs";
-import * as csv from "csv";
-import _ from "lodash";
+import { loadAllJobs } from "./util.js";
 
-// TODO: 大文字小文字に対応
 const hasContainWord = (word, description) => {
   const regexp = new RegExp(word, "i");
   return regexp.test(description);
 };
-// カリー化
-// クロージャを利用している
 const assignDescription = (description) => (word) =>
   hasContainWord(word, description);
 
-fs.createReadStream("./csv/wantedly.csv").pipe(
-  csv.parse({ columns: true }, function (err, data) {
-    // const andWords = ["React", "フロントエンド"];
-    // const orWords = ["リモート", "テレワーク", "在宅", "東京"];
-    const andWords = ["フロントエンド"];
-    const orWords = ["リモート", "テレワーク", "在宅", "東京"];
-    const filteredJobInfos = data.filter(
-      ({ title, company, date, description, url }) => {
-        const hasContainWordDesc = assignDescription(description);
-        return (
-          (andWords.length === 0 ? true : andWords.every(hasContainWordDesc)) &&
-          (orWords.length === 0 ? true : orWords.some(hasContainWordDesc))
-        );
+export const filterJobs = async ({
+  andWords,
+  orWords,
+  sortCriteria,
+  sortDirection,
+}) => {
+  const jobs = await loadAllJobs();
+
+  return jobs
+    .filter(({ description, publishDate, establishmentDate }) => {
+      const hasContainWordInDesc = assignDescription(description);
+      if (sortCriteria === "publishDate" && !publishDate) return false;
+      if (sortCriteria === "establishmentDate" && !establishmentDate)
+        return false;
+      const hasMatchedByWords =
+        (andWords.length === 0 ? true : andWords.every(hasContainWordInDesc)) &&
+        (orWords.length === 0 ? true : orWords.some(hasContainWordInDesc));
+      return hasMatchedByWords;
+    })
+    .sort((a, b) => {
+      const ASCENDING = "ascending";
+      // const DESCENDING = "descending";
+      const stringToDateTime = (date) => {
+        if (date) return new Date(date).getTime();
+        else return new Date("1900/01/01").getTime();
+      };
+      switch (sortCriteria) {
+        case "entry":
+          // 0 未満の場合、a を b より小さいインデックスにソート
+          return sortDirection === ASCENDING
+            ? Number(String(a.countOfEntry).replace(/,/g, "")) -
+                Number(String(b.countOfEntry).replace(/,/g, ""))
+            : Number(String(b.countOfEntry).replace(/,/g, "")) -
+                Number(String(a.countOfEntry).replace(/,/g, ""));
+        case "countOfView":
+          return sortDirection === ASCENDING
+            ? Number(String(a.view).replace(/,/g, "")) -
+                Number(String(b.view).replace(/,/g, ""))
+            : Number(String(b.view).replace(/,/g, "")) -
+                Number(String(a.view).replace(/,/g, ""));
+        case "publishDate":
+          return sortDirection === ASCENDING
+            ? stringToDateTime(a.publishDate) - stringToDateTime(b.publishDate)
+            : stringToDateTime(b.publishDate) - stringToDateTime(a.publishDate);
+        case "establishmentDate":
+          return sortDirection === ASCENDING
+            ? stringToDateTime(a.establishmentDate) -
+                stringToDateTime(b.establishmentDate)
+            : stringToDateTime(b.establishmentDate) -
+                stringToDateTime(a.establishmentDate);
+        case "countOfMember":
+          const aCountOfMember = Number(a.countOfMember || 0);
+          const bCountOfMember = Number(b.countOfMember || 0);
+          if (sortDirection === ASCENDING) {
+            return aCountOfMember - bCountOfMember;
+          } else return bCountOfMember - aCountOfMember;
+        default:
+          return true;
       }
-    );
-    let jobs = new Map();
-    filteredJobInfos.forEach((jobInfo) => {
-      const company = jobInfo.company;
-      if (jobs.has(company)) {
-        // 既存のobjectに追加
-        const companyJobList = jobs.get(company);
-        jobs.set(company, [...companyJobList, jobInfo]);
-      } else jobs.set(company, [jobInfo]);
     });
-    const jobsSplitByCompany = [];
-    for (let [key, companyJobs] of jobs.entries()) {
-      jobsSplitByCompany.push(companyJobs);
-    }
-    console.log(
-      jobsSplitByCompany.map((companyJobs) =>
+};
+
+const execFilterFunc = async () => {
+  const filteredJobs = await filterJobs({
+    andWords: ["react"],
+    orWords: [],
+  });
+  return;
+
+  let jobs = new Map();
+  filteredJobs.forEach((jobInfo) => {
+    const company = jobInfo.company;
+    if (jobs.has(company)) {
+      // 既存のobjectに追加
+      const companyJobList = jobs.get(company);
+      jobs.set(company, [...companyJobList, jobInfo]);
+    } else jobs.set(company, [jobInfo]);
+  });
+  const jobsSplitByCompany = [];
+  for (let [key, companyJobs] of jobs.entries()) {
+    jobsSplitByCompany.push(companyJobs);
+  }
+  console.log(
+    jobsSplitByCompany
+      .map((companyJobs) =>
         companyJobs.map(
-          ({ title, company, date, url }) =>
-            `(${date})[${company}]${title}: ${url}`
+          ({ title, company, publishDate, url }) =>
+            `(${publishDate})[${company}]${title}: ${url}`
         )
-      ).map(companyJobs => companyJobs[0])
-    );
-    console.log(jobsSplitByCompany.length)
-  })
-);
+      )
+      .map((companyJobs) => companyJobs[0])
+  );
+  console.log(jobsSplitByCompany.length);
+};
+
+// execFilterFunc();

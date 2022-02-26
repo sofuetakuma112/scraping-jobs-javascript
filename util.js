@@ -1,3 +1,7 @@
+import fs from "fs";
+import * as csv from "csv";
+import _ from "lodash";
+
 export const getTextContentFromElemHandler = async (elementHandle) => {
   const textContentProperty = await elementHandle.getProperty("textContent");
   return textContentProperty.jsonValue();
@@ -54,19 +58,32 @@ export const formatText = (text) => {
     .join("\n");
 };
 
+export const createDistinguishedNameFromUrl = (url) => {
+  const params = new URLSearchParams(url.slice(url.indexOf("?"), url.length));
+  let text = "";
+  for (const [key, value] of params.entries()) {
+    if (key !== "page") {
+      text += `${key}=${value}&`;
+    }
+  }
+  text = text.slice(0, text.length - 1);
+  return text.replace(/\[\]/g, "");
+};
+
 export const extractInfoFromDetailPage = async (detailUrl, page) => {
-  const urlNoQuery = detailUrl.replace(/\?.*$/, "");
-  console.log(urlNoQuery);
+  console.log(detailUrl);
   await Promise.all([
-    page.goto(urlNoQuery),
+    page.goto(detailUrl),
     page.waitForNavigation({ waitUntil: ["load", "networkidle2"] }),
   ]);
   const titleSuggestionsElem1 = await page.$(".project-title.new-style");
-  const titleSuggestionsElem2 = await page.$(".project-title");
+  const titleSuggestionsElem2 = await page.$(".project-info > .project-title");
   const titleElem = titleSuggestionsElem1 || titleSuggestionsElem2;
 
   const companySuggestionsElem1 = await page.$(".new-style.company-link");
-  const companySuggestionsElem2 = await page.$(".company-name");
+  const companySuggestionsElem2 = await page.$(
+    ".company-title-section > .company-name"
+  );
   const companyElem = companySuggestionsElem1 || companySuggestionsElem2;
 
   let establishmentDateElem;
@@ -126,20 +143,32 @@ export const extractInfoFromDetailPage = async (detailUrl, page) => {
     location = (await getTextContentFromElemHandler(locationElem)).trim();
   }
 
-  const publishDateText = (await getTextContentFromElemHandler(separatedElems[0])).trim();
+  let publishDateText;
+  try {
+    publishDateText = (
+      await getTextContentFromElemHandler(separatedElems[0])
+    ).trim();
+  } catch {
+    publishDateText = "";
+  }
   const publishDate = formatDate(publishDateText);
 
-  const viewText = (
-    await getTextContentFromElemHandler(separatedElems[1])
-  ).trim();
-  const view = viewText.slice(0, viewText.indexOf("views")).trim();
+  let viewText
+  try {
+    viewText = (
+      await getTextContentFromElemHandler(separatedElems[1])
+    ).trim().replace(/,/g, "");
+  } catch {
+    viewText = null
+  }
+  const view = viewText && viewText.slice(0, viewText.indexOf("views")).trim();
 
   const description = (
     await getTextContentFromElemHandler(descriptionElem)
   ).trim();
   const formattedDesc = formatText(description);
 
-  const entry = (await getTextContentFromElemHandler(entryElem)).trim();
+  const entry = (await getTextContentFromElemHandler(entryElem)).trim().replace(/,/g, "");
   const countOfEntry = entry.slice(0, entry.indexOf("人"));
 
   console.log(title);
@@ -154,6 +183,48 @@ export const extractInfoFromDetailPage = async (detailUrl, page) => {
     view,
     countOfEntry,
     description: formattedDesc,
-    url: urlNoQuery,
+    url: detailUrl,
   };
+};
+
+export const loadAndParseCsv = (filePath) => {
+  let rows = [];
+  const parser = csv.parse({ columns: true }, function (err, data) {
+    rows = [...rows, ...data];
+  });
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(filePath).pipe(parser);
+
+    parser.on("end", function () {
+      resolve(rows);
+    });
+  });
+};
+
+export const loadAllJobs = async () => {
+  const csvFilePaths = await getCsvFileNameList("./csv");
+  const listOfJobListForEachCsv = await Promise.all(
+    csvFilePaths.map((path) => loadAndParseCsv(path))
+  );
+  return _.uniqBy(
+    listOfJobListForEachCsv.reduce(
+      (totalJobs, jobsForCsv) => [...totalJobs, ...jobsForCsv],
+      []
+    ),
+    "url"
+  );
+};
+
+export const getCsvFileNameList = (directoryPath) => {
+  return new Promise((resolve, reject) => {
+    fs.readdir(directoryPath, function (err, files) {
+      if (err) reject(err);
+      const fullPaths = files.map((file) => `${directoryPath}/${file}`);
+      const fileList = fullPaths.filter(
+        (file) => fs.statSync(file).isFile() && /.*\.csv$/.test(file)
+      ); //絞り込み
+
+      resolve(fileList);
+    });
+  });
 };
