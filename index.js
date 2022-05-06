@@ -29,7 +29,7 @@ page.setUserAgent(userAgent);
 page.setDefaultNavigationTimeout(60000);
 
 const startUrl =
-  "https://www.wantedly.com/projects?type=popular&page=1&occupation_types%5B%5D=jp__engineering&hiring_types%5B%5D=part_time&hiring_types%5B%5D=internship";
+  "https://www.wantedly.com/projects?type=recent&page=1&occupation_types%5B%5D=jp__engineering&hiring_types%5B%5D=internship&hiring_types%5B%5D=part_time";
 // 以下の処理順だと page.waitForNavigation() を実行する前に page.click() によるページ遷移が終わっていることがあり、
 // その場合、page.waitForNavigation()はページ遷移を待ち続けてタイムアウトしてしまいます。
 // page.click('a');

@@ -153,13 +153,13 @@ export const extractInfoFromDetailPage = async (detailUrl, page) => {
   }
   const publishDate = formatDate(publishDateText);
 
-  let viewText
+  let viewText;
   try {
-    viewText = (
-      await getTextContentFromElemHandler(separatedElems[1])
-    ).trim().replace(/,/g, "");
+    viewText = (await getTextContentFromElemHandler(separatedElems[1]))
+      .trim()
+      .replace(/,/g, "");
   } catch {
-    viewText = null
+    viewText = null;
   }
   const view = viewText && viewText.slice(0, viewText.indexOf("views")).trim();
 
@@ -168,7 +168,9 @@ export const extractInfoFromDetailPage = async (detailUrl, page) => {
   ).trim();
   const formattedDesc = formatText(description);
 
-  const entry = (await getTextContentFromElemHandler(entryElem)).trim().replace(/,/g, "");
+  const entry = (await getTextContentFromElemHandler(entryElem))
+    .trim()
+    .replace(/,/g, "");
   const countOfEntry = entry.slice(0, entry.indexOf("人"));
 
   console.log(title);
@@ -227,4 +229,12 @@ export const getCsvFileNameList = (directoryPath) => {
       resolve(fileList);
     });
   });
+};
+
+export const isKeyExists = (obj, key) => {
+  if (obj[key] == undefined) {
+    return false;
+  } else {
+    return true;
+  }
 };
